@@ -5,6 +5,7 @@ import { z } from "zod";
 import { addBodySchema, fixBodySchema } from "./schemas";
 import * as store from "./store";
 import { TermoJaExisteError, TermoNaoEncontradoError } from "./store";
+import { log } from "./log";
 
 export const app = express();
 
@@ -16,6 +17,43 @@ app.use(express.json());
 // de onde o servidor é iniciado.
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 app.use(express.static(publicDir));
+
+// Log operacional por requisição (Entrega 2): registra "recebida" e "concluída"
+// com id próprio, cliente, método+rota, chave (quando há), status, duração e
+// quantas requisições estão "em voo" — o que evidencia o isolamento de chamadas
+// concorrentes sobre chaves diferentes. (Arquivos estáticos já foram servidos
+// acima; aqui passam apenas as requisições do protocolo.)
+let seqReq = 0;
+let emVoo = 0;
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const id = ++seqReq;
+  emVoo += 1;
+  const inicio = process.hrtime.bigint();
+  log.info("req.recebida", {
+    req: id,
+    metodo: req.method,
+    rota: req.originalUrl,
+    cliente: req.ip,
+    em_voo: emVoo,
+  });
+  res.on("finish", () => {
+    emVoo -= 1;
+    const ms = Math.round(Number(process.hrtime.bigint() - inicio) / 1e5) / 10;
+    const params = req.params as Record<string, string | undefined>;
+    const corpo = req.body as { chave?: unknown } | undefined;
+    const chaveBruta = params.chave ?? (corpo && typeof corpo === "object" ? corpo.chave : undefined);
+    log.info("req.concluida", {
+      req: id,
+      metodo: req.method,
+      rota: req.originalUrl,
+      chave: typeof chaveBruta === "string" ? chaveBruta : undefined,
+      status: res.statusCode,
+      ms,
+      em_voo: emVoo,
+    });
+  });
+  next();
+});
 
 // Middleware único de validação de formato (uma forma só de validar).
 // Em falha, responde 422; em sucesso, substitui o corpo pelos dados já
@@ -95,6 +133,6 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     res.status(409).json({ erro: err.message });
     return;
   }
-  console.error(err); // log mínimo para erros inesperados
+  log.erro("erro.inesperado", { mensagem: err instanceof Error ? err.message : String(err) });
   res.status(500).json({ erro: "erro interno" });
 });
