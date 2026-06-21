@@ -135,19 +135,21 @@ sequenceDiagram
 
 ```
 glossario-tecnico/
-├── package.json          # dependências e scripts (dev / start / cliente / demo / typecheck)
+├── package.json          # dependências e scripts (dev / start / cliente / demo / carga / typecheck)
 ├── tsconfig.json         # TypeScript (ESM, strict, sem build)
 ├── README.md
 ├── public/
 │   └── index.html        # interface web (página de apresentação + formulários; consome a API via fetch)
 └── src/
     ├── index.ts              # ponto de entrada: sobe o servidor na porta fixa
-    ├── app.ts                # camada HTTP: middlewares, rotas, mapeia erro → status
+    ├── app.ts                # camada HTTP: middlewares, log por requisição, rotas
     ├── store.ts              # estado em memória (Map) + operações de domínio
     ├── locks.ts              # mutex por chave (estratégia de bloqueio)
     ├── schemas.ts            # schemas Zod + tipos inferidos
+    ├── log.ts                # logger estruturado (logs operacionais)
     ├── cliente.ts            # cliente de linha de comando interativo (consome a API)
-    └── demo-concorrencia.ts  # demonstração executável do mutex por chave
+    ├── demo-concorrencia.ts  # demonstração do mutex (nível unitário)
+    └── carga.ts              # carga concorrente p/ verificar isolamento via logs
 ```
 
 Cada arquivo tem uma responsabilidade única: `schemas` não conhece Express,
@@ -218,7 +220,9 @@ preserva a serialização por termo no momento em que uma etapa assíncrona
 (ex.: persistência) for introduzida na seção crítica. Mantê-lo agora atende ao
 "lock por chave individual" exigido e deixa explícito *quando* e *por que* o
 bloqueio importa neste runtime — diferente de uma linguagem com *threads*, onde
-o lock seria necessário já no caso puramente síncrono.
+o lock seria necessário já no caso puramente síncrono. **Na Entrega 2 esse
+cenário é exercitado de verdade** com o atraso opcional `GLOSSARIO_DELAY_MS`
+(ver *Logs operacionais e isolamento*).
 
 ## Validações
 
@@ -243,6 +247,7 @@ npm run dev        # sobe com auto-reload (tsx watch)
 npm start          # sobe sem watch
 npm run cliente    # cliente interativo (precisa do servidor rodando)
 npm run demo       # demonstração do mutex por chave (não precisa do servidor)
+npm run carga      # dispara requisições concorrentes p/ ver os logs de isolamento
 npm run typecheck  # checagem de tipos (tsc --noEmit)
 ```
 
@@ -338,6 +343,49 @@ Ele imprime uma linha do tempo de três cenários:
 
 É a forma prática de comprovar o "plano de bloqueios transacionais" exigido.
 
+## Logs operacionais e isolamento (Entrega 2)
+
+O servidor emite **logs estruturados** no console: uma linha por evento, no
+formato `<timestamp ISO> [NÍVEL] <evento> campo=valor ...`. Para cada requisição
+há um par `req.recebida` / `req.concluida` com **id próprio**, **cliente** (IP),
+**método+rota**, **chave** (quando há), **status**, **duração (ms)** e o contador
+**`em_voo`** (requisições em andamento naquele instante).
+
+### Como verificar o isolamento das requisições paralelas
+
+1. Suba o servidor em um terminal:
+
+   ```bash
+   npm start
+   # dica: para evidenciar o paralelismo, ligue um atraso artificial (simula I/O):
+   # aí chaves DIFERENTES rodam em paralelo e a MESMA chave serializa pelo mutex.
+   GLOSSARIO_DELAY_MS=80 npm start
+   ```
+
+2. Em outro terminal, gere carga concorrente (vários ADD/QUERY simultâneos sobre
+   chaves diferentes):
+
+   ```bash
+   npm run carga
+   ```
+
+3. Observe os logs do servidor. Em chaves **diferentes**, as requisições são
+   recebidas juntas e `em_voo` sobe (rodam em paralelo, sem conflito), todas
+   terminando com sucesso. Sobre a **mesma** chave, o mutex as serializa
+   (terminam uma após a outra). Exemplo real (com o atraso ligado):
+
+   ```text
+   [INFO] req.recebida  req=2 metodo="POST" rota="/termos" cliente="127.0.0.1" em_voo=1
+   [INFO] req.recebida  req=3 metodo="POST" rota="/termos" cliente="127.0.0.1" em_voo=2
+   [INFO] req.recebida  req=4 metodo="POST" rota="/termos" cliente="127.0.0.1" em_voo=3
+   [INFO] req.concluida req=2 metodo="POST" rota="/termos" chave="TCP" status=201 ms=83.3 em_voo=2
+   [INFO] req.concluida req=3 metodo="POST" rota="/termos" chave="UDP" status=201 ms=81.3 em_voo=1
+   [INFO] req.concluida req=4 metodo="POST" rota="/termos" chave="IP"  status=201 ms=81.0 em_voo=0
+   ```
+
+   O `em_voo > 1` em chaves diferentes evidencia o paralelismo; cada `req=`
+   distinto, com sua `chave=` e `status=`, mostra que **não há conflito** entre elas.
+
 ## Status da Entrega 1
 
 - [x] Decisão tecnológica documentada e justificada (seção *Tecnologias*).
@@ -351,6 +399,16 @@ Ele imprime uma linha do tempo de três cenários:
 Além do mínimo exigido, a entrega inclui uma **interface web** (`GET /`), um
 **cliente de linha de comando** (`npm run cliente`) para interação sem `curl` e
 uma **demonstração executável do mutex por chave** (`npm run demo`).
+
+## Status da Entrega 2 — Comunicação e Core
+
+- [x] Servidor multicliente funcional (Express/Node, conexões concorrentes, em execução contínua).
+- [x] Comandos principais operáveis via console/terminal (`npm run cliente` + `curl`).
+- [x] Lógica de negócio central em memória (ADD/QUERY/FIX/LIST no `store.ts`).
+- [x] Comunicação concorrente sem bloquear (HTTP assíncrono — sem necessidade de WebSocket/MQTT/gRPC).
+- [x] Logs operacionais estruturados (requisições, cliente, operações, status, duração, `em_voo`).
+- [x] Isolamento das requisições paralelas verificável pelos logs (`npm run carga`, opcional `GLOSSARIO_DELAY_MS`).
+- [x] README atualizado com exemplos de ADD/QUERY e como verificar os logs de isolamento.
 
 ## Equipe do Projeto
 

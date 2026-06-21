@@ -11,6 +11,7 @@
     "start": "tsx src/index.ts",
     "cliente": "tsx src/cliente.ts",
     "demo": "tsx src/demo-concorrencia.ts",
+    "carga": "tsx src/carga.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

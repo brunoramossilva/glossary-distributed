@@ -25,6 +25,15 @@ export class TermoJaExisteError extends Error {
   }
 }
 
+// Atraso opcional (ms) APENAS para demonstração de concorrência. Quando
+// GLOSSARIO_DELAY_MS > 0, a seção crítica de ADD/FIX cede o controle num
+// `await`, tornando visível nos logs (em_voo > 1) o paralelismo entre chaves
+// diferentes e fazendo o mutex por chave realmente serializar operações sobre
+// a MESMA chave. Em produção fica desligado (0) e não afeta o desempenho.
+const DELAY_MS = Number(process.env.GLOSSARIO_DELAY_MS) || 0;
+const talvezAtraso = (): Promise<void> =>
+  DELAY_MS > 0 ? new Promise((resolve) => setTimeout(resolve, DELAY_MS)) : Promise.resolve();
+
 // QUERY — leitura de um termo. Leitura é atômica no event loop, não usa lock.
 export function query(chave: string): Termo {
   const definicao = termos.get(chave);
@@ -40,7 +49,8 @@ export function list(): Termo[] {
 // ADD — cria um termo novo; falha se já existir (regra de unicidade).
 // Serializado por chave: o "checa-e-escreve" roda sob o mutex daquela chave.
 export function add(chave: string, definicao: string): Promise<Termo> {
-  return withKeyLock(chave, () => {
+  return withKeyLock(chave, async () => {
+    await talvezAtraso();
     if (termos.has(chave)) throw new TermoJaExisteError(chave);
     termos.set(chave, definicao);
     return { chave, definicao };
@@ -50,7 +60,8 @@ export function add(chave: string, definicao: string): Promise<Termo> {
 // FIX — atualiza um termo existente; falha se não existir.
 // Serializado por chave pelo mesmo motivo do ADD.
 export function fix(chave: string, definicao: string): Promise<Termo> {
-  return withKeyLock(chave, () => {
+  return withKeyLock(chave, async () => {
+    await talvezAtraso();
     if (!termos.has(chave)) throw new TermoNaoEncontradoError(chave);
     termos.set(chave, definicao);
     return { chave, definicao };
