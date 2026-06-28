@@ -150,3 +150,6 @@ dist/
 
 # Persistência local (Entrega 3) — dados gerados em tempo de execução
 data/
+
+.test-glossario.json
+.test-glossario.json.tmp

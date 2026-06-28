@@ -2,7 +2,7 @@ import express, { type Request, type Response, type NextFunction } from "express
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { addBodySchema, fixBodySchema } from "./schemas";
+import { addBodySchema, fixBodySchema, normalizeChave } from "./schemas";
 import * as store from "./store";
 import { TermoJaExisteError, TermoNaoEncontradoError } from "./store";
 import { estadoLocks } from "./locks";
@@ -122,7 +122,7 @@ app.get("/termos", (_req: Request, res: Response) => {
 
 // QUERY — GET /termos/:chave
 app.get("/termos/:chave", (req: Request<{ chave: string }>, res: Response) => {
-  res.status(200).json(store.query(req.params.chave));
+  res.status(200).json(store.query(normalizeChave(req.params.chave)));
 });
 
 // ADD — POST /termos
@@ -141,7 +141,7 @@ app.put(
   validarCorpo(fixBodySchema),
   async (req: Request<{ chave: string }>, res: Response) => {
     const { definicao } = req.body;
-    res.status(200).json(await store.fix(req.params.chave, definicao));
+    res.status(200).json(await store.fix(normalizeChave(req.params.chave), definicao));
   },
 );
 

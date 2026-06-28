@@ -97,3 +97,9 @@ export function fix(chave: string, definicao: string): Promise<Termo> {
     return { chave, definicao };
   });
 }
+
+// Usado apenas pelos testes — limpa o estado em memória entre cada teste.
+// A persistência em disco aponta para .test-glossario.json (via vitest.config.ts).
+export function _resetParaTestes(): void {
+  termos.clear();
+}

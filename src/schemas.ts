@@ -26,3 +26,5 @@ export const fixBodySchema = z.object({ definicao });
 // Tipos inferidos a partir dos schemas — uma fonte de verdade só.
 export type AddBody = z.infer<typeof addBodySchema>;
 export type FixBody = z.infer<typeof fixBodySchema>;
+
+export const normalizeChave = (raw: string): string => raw.trim();
