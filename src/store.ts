@@ -58,7 +58,9 @@ export function query(chave: string): Termo {
 
 // LIST — leitura de todos os termos. Também sem lock.
 export function list(): Termo[] {
-  return [...termos].map(([chave, definicao]) => ({ chave, definicao }));
+  return [...termos]
+    .map(([chave, definicao]) => ({ chave, definicao }))
+    .sort((a, b) => a.chave.localeCompare(b.chave, "pt-BR"));
 }
 
 export function search(termo: string): Termo[] {

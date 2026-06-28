@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
+    silent: true,
     env: {
       NODE_ENV: "test",
       GLOSSARIO_DB: ".test-glossario.json",
