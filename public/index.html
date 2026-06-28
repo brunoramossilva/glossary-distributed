@@ -220,7 +220,7 @@
       return "erro " + r.status;
     }
 
-    // Executa `fn` mantendo o botão em estado de carregamento (spinner + texto).
+    // Executa `fn` mantendo o botão em estado de carregamento (spinner + texto)
     async function comCarregando(btn, texto, fn) {
       const orig = btn.innerHTML;
       btn.disabled = true;
@@ -229,7 +229,7 @@
       finally { btn.disabled = false; btn.innerHTML = orig; }
     }
 
-    // ---------- estado local (espelho do servidor) ----------
+    // estado local (espelho do servidor)
     let termos = [];
     let locks = new Map(); // chave -> { chave, ocupado, aguardando }
 
@@ -238,7 +238,7 @@
       return l && (l.ocupado || l.aguardando > 0) ? l : null;
     }
 
-    // ---------- conexão em tempo real (SSE) ----------
+    // conexão em tempo real (SSE)
     function setConexao(estado) {
       const dot = $("statusDot"), txt = $("statusText");
       dot.className = "dot " + (estado === "conectado" ? "on" : estado === "reconectando" ? "off" : "");
@@ -253,7 +253,7 @@
       setConexao("conectando");
       const es = new EventSource("/eventos");
       es.addEventListener("open", () => setConexao("conectado"));
-      es.addEventListener("error", () => setConexao("reconectando")); // o browser reconecta sozinho
+      es.addEventListener("error", () => setConexao("reconectando"));
       es.addEventListener("termos", (ev) => { termos = JSON.parse(ev.data); renderTermos(); });
       es.addEventListener("locks", (ev) => { aplicarLocks(JSON.parse(ev.data)); });
     }
@@ -280,7 +280,7 @@
       atualizarNotaFix();
     }
 
-    // ---------- render: lista de termos ----------
+    // render: lista de termos
     function renderTermos() {
       $("count").textContent = termos.length ? "(" + termos.length + ")" : "";
       const wrap = $("tableWrap");
@@ -331,7 +331,7 @@
       return tr;
     }
 
-    // Atualiza os "selos" de trava nas linhas, sem redesenhar a tabela toda.
+    // Atualiza os "selos" de trava nas linhas
     function renderBadges() {
       document.querySelectorAll("tr[data-chave]").forEach((tr) => {
         const l = travaDe(tr.dataset.chave);
@@ -351,7 +351,7 @@
       });
     }
 
-    // ---------- render: painel de atividade (travas) ----------
+    // render: painel de atividade (travas)
     function renderAtividade() {
       const wrap = $("atividade");
       const ativos = [...locks.values()].filter((l) => l.ocupado || l.aguardando > 0);
@@ -377,7 +377,7 @@
       });
     }
 
-    // ---------- leitura (QUERY) ----------
+    // leitura (QUERY)
     function mostrarLeitura(t) {
       $("leituraWrap").hidden = false;
       $("leituraTermo").textContent = t.chave;
@@ -394,7 +394,7 @@
       } catch { flash("Sem conexão com o servidor.", "err"); }
     }
 
-    // ---------- adicionar (ADD) ----------
+    // adicionar (ADD)
     async function adicionar() {
       const chave = $("addChave").value.trim();
       const definicao = $("addDef").value.trim();
@@ -408,7 +408,7 @@
       });
     }
 
-    // ---------- retificar (FIX) ----------
+    // retificar (FIX)
     function carregarFix(t) {
       $("fixChave").value = t.chave;
       $("fixDef").value = t.definicao;
@@ -417,8 +417,8 @@
       $("fixDef").focus();
     }
 
-    // Mostra um aviso ao vivo quando o termo no formulário está travado por
-    // outra retificação em andamento (sua alteração entrará na fila).
+    // Avisa quando termo no formulário está travado por outra retificação em andamento
+    // (alteração entrará na fila).
     function atualizarNotaFix() {
       const chave = $("fixChave").value.trim();
       const nota = $("fixNota");
@@ -451,7 +451,7 @@
       });
     }
 
-    // ---------- ligações ----------
+    // ligações
     $("addBtn").onclick = adicionar;
     $("qBtn").onclick = buscar;
     $("fixBtn").onclick = retificar;

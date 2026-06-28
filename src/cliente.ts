@@ -1,17 +1,10 @@
-// Cliente de linha de comando interativo do Glossário Técnico Compartilhado.
-//
-// Por que existe: o servidor é uma API REST — o terminal onde roda `npm run dev`
-// é só o servidor e não lê comandos digitados. Para interagir sem montar curl
-// (ou Invoke-RestMethod no PowerShell) à mão, e funcionar igual em Windows,
-// Linux e macOS, este cliente lê comandos (ADD/FIX/QUERY/LIST) e faz a
-// requisição HTTP por baixo — no mesmo espírito do cliente das atividades de
-// socket. Rode com: npm run cliente (com o servidor já no ar em outro terminal).
+// Para rodar, com o servidor no ar em outro terminal:
+//   npm run cliente
 
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
-// Endereço do servidor (mesma porta fixa do index.ts). Trocável por variável
-// de ambiente, sem mexer no código.
+// Endereço do servidor (mesma porta fixa do index.ts)
 const BASE = process.env.GLOSSARIO_URL ?? "http://localhost:3000";
 
 const AJUDA = `Comandos:
@@ -47,14 +40,14 @@ async function pedir(metodo: string, caminho: string, corpo?: unknown): Promise<
   return { status: resp.status, corpo: corpoParsed };
 }
 
-// Separa a primeira palavra (chave) do restante da linha (definição).
+// Separa a primeira palavra (chave) do restante da linha (definição)
 function chaveEResto(args: string): [string, string] {
   const i = args.indexOf(" ");
   if (i === -1) return [args.trim(), ""];
   return [args.slice(0, i).trim(), args.slice(i + 1).trim()];
 }
 
-// Imprime de forma amigável uma resposta que devolve { chave, definicao } ou { erro }.
+// Imprime uma resposta que devolve { chave, definicao } ou { erro }
 function mostrarTermo(r: Resposta): void {
   if (r.status >= 200 && r.status < 300) {
     console.log(`  ${r.corpo.chave} → ${r.corpo.definicao}`);
@@ -116,9 +109,6 @@ async function main(): Promise<void> {
   console.log(`Glossário Técnico — cliente interativo (servidor: ${BASE})`);
   console.log("Digite HELP para ver os comandos, ou SAIR para encerrar.\n");
 
-  // Iterar a interface com `for await...of` funciona tanto no terminal
-  // interativo (uma linha por vez, conforme o usuário digita) quanto com a
-  // entrada vinda de um pipe (lê todas as linhas até o EOF).
   rl.setPrompt("glossário> ");
   rl.prompt();
 

@@ -1,28 +1,10 @@
-// Persistência local em disco (Entrega 3).
-//
-// O glossário passa a ser DURÁVEL: o estado sobrevive a reinícios do servidor.
-// Guardamos o dicionário inteiro como um único arquivo JSON e o gravamos de
-// forma ATÔMICA (escreve num arquivo temporário e depois faz `rename`), de modo
-// que o arquivo final nunca fique pela metade — mesmo se o processo cair no meio
-// de uma gravação.
-//
-// As gravações são SERIALIZADAS por uma corrente única (uma promise encadeada):
-// cada salvamento espera o anterior e, ao efetivamente rodar, serializa o estado
-// MAIS RECENTE do mapa em memória (a função `snapshot` é chamada na hora da
-// gravação). Isso evita que duas gravações concorrentes — disparadas por FIX/ADD
-// de chaves diferentes que rodam em paralelo — percam atualizações no disco.
-
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { log } from "./log";
 
-// Raiz do projeto: este arquivo é .../src/persistencia.ts, então subir dois
-// níveis chega na raiz, independentemente de onde o servidor foi iniciado.
 const raizProjeto = dirname(dirname(fileURLToPath(import.meta.url)));
 
-// Caminho do arquivo de dados. Trocável por variável de ambiente sem mexer no
-// código (útil para testes ou para apontar um volume persistente).
 const ARQUIVO = process.env.GLOSSARIO_DB ?? join(raizProjeto, "data", "glossario.json");
 
 export function caminhoArquivo(): string {
@@ -30,7 +12,7 @@ export function caminhoArquivo(): string {
 }
 
 // Lê o arquivo no início. Se não existir, começa vazio. Se estiver corrompido,
-// avisa nos logs e começa vazio (não derruba o servidor).
+// avisa nos logs e começa vazio (não derruba o servidor)
 export async function carregar(): Promise<Map<string, string>> {
   try {
     const texto = await readFile(ARQUIVO, "utf8");

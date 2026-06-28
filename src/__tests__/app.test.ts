@@ -7,7 +7,7 @@ beforeEach(() => {
   _resetParaTestes();
 });
 
-// ─── HEALTH ─────────────────────────────────────────────────────────────────
+// HEALTH
 
 describe("GET /health", () => {
   it("retorna 200 com status ok", async () => {
@@ -17,7 +17,7 @@ describe("GET /health", () => {
   });
 });
 
-// ─── ADD ────────────────────────────────────────────────────────────────────
+// ADD
 
 describe("POST /termos", () => {
   it("201 ao criar termo válido", async () => {
@@ -66,7 +66,7 @@ describe("POST /termos", () => {
   });
 });
 
-// ─── QUERY ──────────────────────────────────────────────────────────────────
+// QUERY
 
 describe("GET /termos/:chave", () => {
   it("200 retorna o termo existente", async () => {
@@ -89,7 +89,7 @@ describe("GET /termos/:chave", () => {
   });
 });
 
-// ─── FIX ────────────────────────────────────────────────────────────────────
+// FIX
 
 describe("PUT /termos/:chave", () => {
   it("200 atualiza definição de termo existente", async () => {
@@ -131,7 +131,7 @@ describe("PUT /termos/:chave", () => {
   });
 });
 
-// ─── LIST ───────────────────────────────────────────────────────────────────
+// LIST
 
 describe("GET /termos", () => {
   it("200 retorna array vazio quando glossário vazio", async () => {
@@ -147,9 +147,50 @@ describe("GET /termos", () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
   });
+
+  it("filtra por substring na chave via ?busca=", async () => {
+    await request(app).post("/termos").send({ chave: "TCP", definicao: "Protocolo confiável." });
+    await request(app).post("/termos").send({ chave: "UDP", definicao: "Protocolo sem conexão." });
+    await request(app).post("/termos").send({ chave: "DNS", definicao: "Sistema de nomes." });
+
+    const res = await request(app).get("/termos?busca=TCP");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].chave).toBe("TCP");
+  });
+
+  it("filtra por substring na definição via ?busca=", async () => {
+    await request(app).post("/termos").send({ chave: "TCP", definicao: "Protocolo confiável." });
+    await request(app).post("/termos").send({ chave: "UDP", definicao: "Protocolo sem conexão." });
+    await request(app).post("/termos").send({ chave: "DNS", definicao: "Sistema de nomes." });
+
+    const res = await request(app).get("/termos?busca=Protocolo");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+  });
+
+  it("busca é case-insensitive", async () => {
+    await request(app).post("/termos").send({ chave: "TCP", definicao: "Protocolo confiável." });
+    const res = await request(app).get("/termos?busca=tcp");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+  });
+
+  it("retorna array vazio quando busca não encontra nada", async () => {
+    const res = await request(app).get("/termos?busca=INEXISTENTE");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it("ignora ?busca= vazio e retorna todos", async () => {
+    await request(app).post("/termos").send({ chave: "TCP", definicao: "def" });
+    const res = await request(app).get("/termos?busca=");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+  });
 });
 
-// ─── LOCKS ──────────────────────────────────────────────────────────────────
+// LOCKS
 
 describe("GET /locks", () => {
   it("retorna array vazio quando não há travas ativas", async () => {
@@ -159,7 +200,7 @@ describe("GET /locks", () => {
   });
 });
 
-// ─── API ────────────────────────────────────────────────────────────────────
+// API
 
 describe("GET /api", () => {
   it("retorna índice de endpoints", async () => {

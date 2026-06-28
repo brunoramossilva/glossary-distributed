@@ -1,14 +1,5 @@
-// Demonstração HTTP do bloqueio transacional do FIX (Entrega 3).
-//
-// Dispara FIX concorrentes sobre a MESMA chave e sobre chaves DIFERENTES,
-// medindo o início e o fim de cada requisição. Comprova pelo TEMPO que o
-// servidor SERIALIZA o FIX da mesma chave (um espera o outro) e mantém chaves
-// diferentes EM PARALELO — ou seja, a trava está ativa na rota do FIX.
-//
-// Pré-requisito: servidor no ar, de preferência com o atraso ligado para alargar
-// a janela de bloqueio e tornar o efeito óbvio:
-//   GLOSSARIO_DELAY_MS=1500 npm start
-// Uso (em outro terminal):
+// Para rodar, com o servidor no ar em outro terminal 
+// (com o atraso ligado para alargar a janela de bloqueio e tornar o efeito óbvio):
 //   npm run demo:fix
 
 const BASE = process.env.GLOSSARIO_URL ?? "http://localhost:3000";
@@ -67,6 +58,4 @@ main().catch((e: unknown) => {
   process.exitCode = 1;
 });
 
-// Marca este arquivo como módulo ES (isola seu escopo do de outros scripts
-// utilitários que também rodam em nível de topo, como src/carga.ts).
 export {};

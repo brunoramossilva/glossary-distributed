@@ -1,21 +1,3 @@
-// Mutex por chave — trava transacional (Entregas 1 → 3).
-//
-// Por que existe: o Node executa JS num único event loop, então um trecho
-// SÍNCRONO roda até o fim sem ser intercalado por outra requisição. A corrida só
-// aparece quando a seção crítica cede o controle num `await`. Na Entrega 3 isso
-// passou a ser REAL: ADD/FIX agora persistem em disco (I/O assíncrono) dentro da
-// seção crítica, então a trava é GENUINAMENTE necessária — ela serializa o
-// "checa-e-escreve-e-persiste" sobre a MESMA chave enquanto chaves diferentes
-// seguem em paralelo. É o bloqueio transacional exigido para o comando FIX:
-// enquanto um cliente retifica um termo, as demais alterações sobre aquele mesmo
-// termo ficam retidas até a conclusão.
-//
-// Implementação: uma "corrente" de promises por chave; cada operação é encadeada
-// após a anterior. Além de serializar, este módulo RASTREIA o estado de cada
-// trava (se está ocupada e quantas operações aguardam) e publica um retrato no
-// barramento a cada mudança, para a interface mostrar em tempo real quando um
-// termo está sendo editado/bloqueado.
-
 import { barramento } from "./barramento";
 
 export interface EstadoLock {
@@ -32,8 +14,7 @@ interface Entrada {
 
 const entradas = new Map<string, Entrada>();
 
-// Retrato apenas das travas "ativas" (ocupadas ou com fila) — é o que a
-// interface precisa exibir.
+// Retrato apenas das travas "ativas" (ocupadas ou com fila)
 function retrato(): EstadoLock[] {
   const lista: EstadoLock[] = [];
   for (const [chave, e] of entradas) {
@@ -60,7 +41,7 @@ export function withKeyLock<T>(chave: string, fn: () => Promise<T> | T): Promise
   }
   const e = entrada;
 
-  // Se a chave já está ocupada ou com fila, esta operação entra "aguardando".
+  // Se a chave já está ocupada ou com fila, esta operação entra "aguardando"
   if (e.ocupado || e.aguardando > 0) {
     e.aguardando += 1;
     publicar();
@@ -68,14 +49,14 @@ export function withKeyLock<T>(chave: string, fn: () => Promise<T> | T): Promise
 
   const anterior = e.cauda;
 
-  // Roda `fn` depois da anterior terminar (mesmo que a anterior tenha falhado).
+  // Roda `fn` depois da anterior terminar (mesmo que a anterior tenha falhado)
   const resultado = anterior.then(
     () => iniciar(),
     () => iniciar(),
   );
 
   async function iniciar(): Promise<T> {
-    // Assumiu a seção crítica: sai da fila e marca ocupado.
+    // Assumiu a seção crítica: sai da fila e marca ocupado
     if (e.aguardando > 0) e.aguardando -= 1;
     e.ocupado = true;
     publicar();
@@ -87,7 +68,7 @@ export function withKeyLock<T>(chave: string, fn: () => Promise<T> | T): Promise
     }
   }
 
-  // Elo que nunca rejeita, para não quebrar o encadeamento da próxima operação.
+  // Elo que nunca rejeita, para não quebrar o encadeamento da próxima operação
   const elo = resultado.then(
     () => undefined,
     () => undefined,
@@ -95,7 +76,7 @@ export function withKeyLock<T>(chave: string, fn: () => Promise<T> | T): Promise
   e.cauda = elo;
 
   // Limpa a entrada quando esta for a última da corrente e a trava estiver
-  // livre (sem ocupado nem fila), para o Map não crescer indefinidamente.
+  // livre (sem ocupado nem fila) para o Map não crescer indefinidamente
   void elo.then(() => {
     const atual = entradas.get(chave);
     if (atual === e && atual.cauda === elo && !atual.ocupado && atual.aguardando === 0) {
@@ -103,6 +84,6 @@ export function withKeyLock<T>(chave: string, fn: () => Promise<T> | T): Promise
     }
   });
 
-  // O chamador recebe o resultado real (que pode rejeitar com erro de domínio).
+  // O chamador recebe o resultado real (que pode rejeitar com erro de domínio)
   return resultado;
 }

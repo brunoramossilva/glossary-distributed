@@ -1,11 +1,5 @@
-// Carga concorrente (Entrega 2): dispara várias requisições AO MESMO TEMPO,
-// sobre chaves DIFERENTES, para evidenciar nos LOGS DO SERVIDOR que requisições
-// paralelas são isoladas — cada uma com seu id, com o campo `em_voo` > 1 e sem
-// conflito entre chaves distintas.
-//
-// Uso (com o servidor no ar em outro terminal):
+// Para rodar, com o servidor no ar em outro terminal:
 //   npm run carga
-// Depois, olhe os logs no terminal onde roda o servidor.
 
 const BASE = process.env.GLOSSARIO_URL ?? "http://localhost:3000";
 

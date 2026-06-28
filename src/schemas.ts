@@ -1,8 +1,5 @@
 import { z } from "zod";
 
-// Contratos de validação de ENTRADA (formato). As regras de negócio de
-// unicidade/existência ficam no store; aqui validamos apenas o formato.
-
 // Chave do termo: texto não-vazio, sem espaços nas pontas, com limite de tamanho.
 const chave = z
   .string()

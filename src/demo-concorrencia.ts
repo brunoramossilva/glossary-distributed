@@ -1,12 +1,6 @@
 // Demonstração da estratégia de bloqueio (mutex por chave) de src/locks.ts.
-//
-// É a peça que o enunciado mais valoriza ("plano conceitual de bloqueios
-// transacionais"). Como os handlers HTTP são síncronos, a serialização não
-// aparece numa requisição comum — então aqui exercitamos o `withKeyLock`
-// diretamente, com atrasos artificiais, para tornar o comportamento visível.
-//
-// Rode com: npm run demo
 
+// Para rodar: npm run demo
 import { withKeyLock } from "./locks";
 
 let marco = Date.now();

@@ -14,22 +14,18 @@ export const app = express();
 // Faz o parsing do corpo JSON (necessário para POST/PUT).
 app.use(express.json());
 
-// Serve a interface web estática: public/index.html é entregue em "/".
-// O caminho é resolvido a partir deste arquivo, independente do diretório
-// de onde o servidor é iniciado.
+// Serve a interface web estática: public/index.html é entregue em "/"
+// O caminho é resolvido a partir deste arquivo
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 app.use(express.static(publicDir));
 
-// Log operacional por requisição (Entrega 2): registra "recebida" e "concluída"
-// com id próprio, cliente, método+rota, chave (quando há), status, duração e
-// quantas requisições estão "em voo" — o que evidencia o isolamento de chamadas
-// concorrentes sobre chaves diferentes. (Arquivos estáticos já foram servidos
-// acima; aqui passam apenas as requisições do protocolo.)
+// Log operacional por requisição: registra "recebida" e "concluída"
+// com id próprio, cliente, método+rota, chave (quando há), status, duração e quantas requisições estão "em voo"
 let seqReq = 0;
 let emVoo = 0;
 app.use((req: Request, res: Response, next: NextFunction) => {
   // O fluxo de eventos (SSE) é uma conexão longa que só termina quando o
-  // cliente desconecta; fica fora do contador em_voo para não distorcer a
+  // cliente desconecta e fica fora do contador em_voo para não distorcer a
   // observação de concorrência das requisições do protocolo.
   if (req.path === "/eventos") return next();
   const id = ++seqReq;
@@ -44,10 +40,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   });
   res.on("finish", () => {
     emVoo -= 1;
-    // Logar NUNCA pode derrubar o servidor: em rotas não casadas (ex.:
-    // /favicon.ico pedido pelo navegador) o Express 5 não popula req.params,
-    // então acessá-lo direto lançaria e mataria o processo. Por isso o acesso é
-    // defensivo e todo o corpo fica sob try/catch.
     try {
       const ms = Math.round(Number(process.hrtime.bigint() - inicio) / 1e5) / 10;
       const params = (req.params ?? {}) as Record<string, string | undefined>;
@@ -71,7 +63,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Middleware único de validação de formato (uma forma só de validar).
-// Em falha, responde 422; em sucesso, substitui o corpo pelos dados já
+// Falha retorna 422. Sucesso substitui o corpo pelos dados já
 // normalizados (com trim) e segue para o handler.
 function validarCorpo<T extends z.ZodType>(schema: T) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -85,8 +77,7 @@ function validarCorpo<T extends z.ZodType>(schema: T) {
   };
 }
 
-// Índice do protocolo em JSON. A página web fica em "/" (servida de public/);
-// este endpoint expõe a mesma informação em formato legível por máquina.
+// Índice do protocolo em JSON. A página web fica em "/"
 app.get("/api", (_req: Request, res: Response) => {
   res.status(200).json({
     servico: "Glossário Técnico Compartilhado",
@@ -94,7 +85,7 @@ app.get("/api", (_req: Request, res: Response) => {
     interface: "GET / — página web (public/index.html)",
     endpoints: {
       "GET /health": "verifica se o servidor está no ar",
-      "GET /termos": "lista todos os termos (LIST)",
+      "GET /termos": "lista todos os termos (LIST) — ?busca=texto filtra por substring",
       "GET /termos/:chave": "busca um termo (QUERY)",
       "POST /termos": "cria um termo (ADD) — corpo: { chave, definicao }",
       "PUT /termos/:chave": "atualiza um termo (FIX) — corpo: { definicao }",
@@ -104,19 +95,23 @@ app.get("/api", (_req: Request, res: Response) => {
   });
 });
 
-// Rota de teste exigida na Entrega 1.
+// Rota de teste
 app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
 });
 
-// O navegador pede /favicon.ico automaticamente; respondemos 204 (sem conteúdo)
-// para não poluir os logs com 404.
+// Resposta 204 (sem conteúdo) para pedido automático de favicon.ico do navegador
 app.get("/favicon.ico", (_req: Request, res: Response) => {
   res.status(204).end();
 });
 
 // LIST — GET /termos
 app.get("/termos", (_req: Request, res: Response) => {
+  const busca = req.query.busca;
+  if (typeof busca === "string" && busca.trim().length > 0) {
+    res.status(200).json(store.search(busca.trim()));
+    return;
+  }
   res.status(200).json(store.list());
 });
 
@@ -146,15 +141,12 @@ app.put(
 );
 
 // LOCKS — GET /locks: retrato atual das travas ativas (ocupadas / com fila).
-// Útil para inspeção via curl e como fonte do polling de fallback da interface.
 app.get("/locks", (_req: Request, res: Response) => {
   res.status(200).json(estadoLocks());
 });
 
-// EVENTOS — GET /eventos: fluxo SSE (Server-Sent Events) que entrega o estado em
-// TEMPO REAL para a interface, sem ela precisar atualizar manualmente. Ao
-// conectar, envia um retrato inicial (lista de termos + travas) e, depois,
-// reenvia a cada mudança publicada no barramento por store/locks.
+// EVENTOS — GET /eventos: fluxo SSE entrega o estado em TEMPO REAL para a interface
+// Envia um retrato inicial (lista de termos + travas) e reenvia a cada mudança publicada no barramento por store/locks.
 app.get("/eventos", (req: Request, res: Response) => {
   res.status(200).set({
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -169,14 +161,14 @@ app.get("/eventos", (req: Request, res: Response) => {
     res.write(`data: ${JSON.stringify(dados)}\n\n`);
   };
 
-  // Estado inicial, para o cliente pintar a tela já na conexão.
+  // Estado inicial, para o cliente pintar a tela já na conexão
   enviar("termos", store.list());
   enviar("locks", estadoLocks());
 
   const offTermos = barramento.inscrever("termos:mudou", (lista) => enviar("termos", lista));
   const offLocks = barramento.inscrever("locks:mudou", (snap) => enviar("locks", snap));
 
-  // Comentário-batimento periódico para manter a conexão viva através de proxies.
+  // Comentário-batimento periódico para manter a conexão viva através de proxies
   const batimento = setInterval(() => res.write(": ping\n\n"), 15000);
 
   req.on("close", () => {
@@ -187,7 +179,6 @@ app.get("/eventos", (req: Request, res: Response) => {
 });
 
 // Tratador de erros: mapeia erros de domínio para status HTTP.
-// (Express 5 encaminha erros de handlers async para cá automaticamente.)
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof TermoNaoEncontradoError) {
     res.status(404).json({ erro: err.message });
