@@ -212,6 +212,9 @@ glossario-tecnico/
 │   └── glossario.json    #   estado do glossário em disco
 ├── public/
 │   └── index.html        # interface web (busca, leitura, formulários ADD/FIX; tempo real via SSE)
+├── k6/
+│   └── load-test.js          # teste de carga (k6)
+├── vitest.config.ts          # configuração dos testes automatizados
 └── src/
     ├── index.ts              # ponto de entrada: carrega a persistência e sobe o servidor
     ├── app.ts                # camada HTTP: middlewares, log por requisição, rotas REST e SSE
@@ -224,7 +227,11 @@ glossario-tecnico/
     ├── cliente.ts            # cliente de linha de comando interativo (consome a API)
     ├── demo-concorrencia.ts  # demonstração do mutex (nível unitário)
     ├── demo-fix.ts           # demonstração HTTP do bloqueio do FIX (mesma chave serializa)
-    └── carga.ts              # carga concorrente p/ verificar isolamento via logs
+    ├── carga.ts              # carga concorrente p/ verificar isolamento via logs
+    └── __tests__/
+        ├── store.test.ts     # testes unitários do domínio
+        ├── locks.test.ts     # testes do mutex por chave
+        └── app.test.ts       # testes de integração HTTP
 ```
 
 Cada arquivo tem uma responsabilidade única: `schemas` não conhece Express,
@@ -267,11 +274,14 @@ const entradas = new Map<string, Entrada>();  // uma entrada por chave ativa
 | **LIST** | `GET /termos` | — | `200` `[{ chave, definicao }]` | — |
 | **ADD** | `POST /termos` | `{ chave, definicao }` | `201` `{ chave, definicao }` | `409`, `422` |
 | **FIX** | `PUT /termos/:chave` | `{ definicao }` | `200` `{ chave, definicao }` | `404`, `422` |
+| **REMOVE** | `DELETE /termos/:chave` | — | `200` `{ chave, definicao }` | `404` |
 | (travas) | `GET /locks` | — | `200` `[{ chave, ocupado, aguardando }]` | — |
 | (tempo real) | `GET /eventos` | — | `200` fluxo SSE (`event: termos` / `event: locks`) | — |
 | (teste) | `GET /health` | — | `200` `{ status: "ok" }` | — |
 | (web) | `GET /` | — | `200` página HTML (interface) | — |
 | (índice) | `GET /api` | — | `200` `{ servico, endpoints }` | — |
+| (busca) | `GET /termos?busca=texto` | — | `200` `[{ chave, definicao }]` | — |
+| (métricas) | `GET /stats` | — | `200` `{ total_termos, total_queries, … }` | — |
 
 Semântica dos comandos: **ADD só cria** (`409 Conflict` se o termo já existe) e
 **FIX só atualiza** (`404 Not Found` se o termo não existe). Essa separação torna
@@ -348,6 +358,23 @@ npm run demo       # demonstração do mutex por chave (não precisa do servidor
 npm run demo:fix   # demonstração HTTP do bloqueio do FIX (precisa do servidor)
 npm run carga      # dispara requisições concorrentes p/ ver os logs de isolamento
 npm run typecheck  # checagem de tipos (tsc --noEmit)
+```
+
+### Testes
+
+```bash
+npm test                # executa os 52 testes automatizados (store, locks, rotas HTTP)
+npm run test:watch      # modo watch (re-executa ao salvar)
+npm run test:coverage   # com relatório de cobertura
+```
+
+### Teste de carga (k6)
+
+```bash
+# requer k6 instalado: https://k6.io/docs/get-started/installation/
+# com o servidor rodando em outro terminal:
+k6 run k6/load-test.js
+# resultado obtido: ~747 req/s · p(95)=4.6ms · 0 falhas em 29.907 requisições
 ```
 
 O servidor sobe em `http://localhost:3000` — **abra esse endereço no navegador
@@ -681,6 +708,12 @@ uma **demonstração executável do mutex por chave** (`npm run demo`).
 - [x] **Mensagens de carregamento/bloqueio** na interface durante a retificação ("Salvando…" / "Aguardando liberação…").
 - [x] **Tratamento de erros na interface** (rejeições do servidor, validação e falhas de rede exibidas na tela).
 - [x] **README** com instruções de instalação, execução, **acesso por múltiplos computadores** e **demonstração ao vivo do bloqueio transacional do FIX** (`GLOSSARIO_DELAY_MS` + `npm run demo:fix`).
+- [x] **Testes automatizados** (Vitest + Supertest): 52 testes cobrindo store, locks e rotas HTTP — incluindo teste de concorrência HTTP que documenta a serialização do FIX com `em_voo=2` nos logs.
+- [x] **Teste de carga** (k6): ~747 req/s, p(95)=4,6ms, 0 falhas em 29.907 requisições com 50 usuários simultâneos.
+- [x] **Busca por substring** (`GET /termos?busca=texto`): filtra por chave ou definição, case-insensitive.
+- [x] **Remoção de termos** (`DELETE /termos/:chave`): remove com serialização por lock — concorrência DELETE+ADD documentada por teste.
+- [x] **Métricas de uso** (`GET /stats`): total de termos, queries, adições, retificações, buscas e uptime — exibidas em card na interface.
+- [x] **Correção de normalização**: `req.params.chave` passa por trim antes de chegar ao store, alinhando o comportamento da URL ao do corpo JSON (Zod).
 
 ## Equipe do Projeto
 

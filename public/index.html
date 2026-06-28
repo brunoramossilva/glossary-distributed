@@ -163,6 +163,14 @@
       <div id="fixNota" class="nota" hidden></div>
     </section>
 
+    <!-- MÉTRICAS -->
+    <section class="card" id="statsCard">
+      <h2>Métricas do servidor</h2>
+      <div id="statsWrap" style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+        <p class="empty">Carregando…</p>
+      </div>
+    </section>
+
     <!-- ATIVIDADE / TRAVAS em tempo real -->
     <section class="card">
       <h2>Atividade no servidor <small>(travas em tempo real)</small></h2>
@@ -248,6 +256,35 @@
         : "conectando…";
     }
 
+    function statItem(label, value) {
+      const div = document.createElement("div");
+      div.style.cssText = "text-align:center;min-width:90px";
+      div.innerHTML = `
+        <div style="font-size:1.6rem;font-weight:700;color:var(--teal-dark)">${value}</div>
+        <div style="font-size:.8rem;color:var(--muted)">${label}</div>
+      `;
+      return div;
+    }
+
+    async function atualizarStats() {
+      try {
+        const r = await api("GET", "/stats");
+        if (!r.ok) return;
+        const s = r.data;
+        const wrap = $("statsWrap");
+        wrap.innerHTML = "";
+        wrap.appendChild(statItem("termos", s.total_termos));
+        wrap.appendChild(statItem("consultas", s.total_queries));
+        wrap.appendChild(statItem("adições", s.total_adds));
+        wrap.appendChild(statItem("retificações", s.total_fixes));
+        wrap.appendChild(statItem("buscas", s.total_searches));
+        wrap.appendChild(statItem("uptime (s)", s.uptime_segundos));
+      } catch {}
+    }
+
+    atualizarStats();
+    setInterval(atualizarStats, 10_000);
+
     function conectar() {
       if (!("EventSource" in window)) { iniciarPolling(); return; }
       setConexao("conectando");
@@ -317,16 +354,33 @@
 
       const tdAc = document.createElement("td");
       tdAc.className = "acoes";
+
       const bVer = document.createElement("button");
       bVer.className = "ghost small";
       bVer.textContent = "Ver";
       bVer.onclick = () => mostrarLeitura(t);
+
       const bFix = document.createElement("button");
       bFix.className = "small";
       bFix.textContent = "Retificar";
       bFix.onclick = () => carregarFix(t);
-      tdAc.append(bVer, bFix);
 
+      const bDel = document.createElement("button");
+      bDel.className = "ghost small";
+      bDel.style.color = "var(--danger)";
+      bDel.textContent = "Remover";
+      bDel.onclick = async () => {
+        if (!confirm(`Remover "${t.chave}"?`)) return;
+        bDel.disabled = true;
+        try {
+          const r = await api("DELETE", "/termos/" + encodeURIComponent(t.chave));
+          if (r.ok) flash("Removido: " + t.chave, "ok");
+          else flash("Falha ao remover — " + erroMsg(r), "err");
+        } catch { flash("Sem conexão com o servidor.", "err"); }
+        finally { bDel.disabled = false; }
+      };
+
+      tdAc.append(bVer, " ", bFix, " ", bDel);
       tr.append(tdChave, tdDef, tdAc);
       return tr;
     }
@@ -388,9 +442,24 @@
       const chave = $("qChave").value.trim();
       if (!chave) { flash("Digite um termo para buscar.", "err"); return; }
       try {
+        // Busca exata 
         const r = await api("GET", "/termos/" + encodeURIComponent(chave));
         if (r.ok) { mostrarLeitura(r.data); flash("Encontrado: " + chave); }
-        else { $("leituraWrap").hidden = true; flash("Não encontrado: " + chave, "err"); }
+        // Busca parcial (lista)
+        else {
+          flash("Não encontrado: " + chave + " — buscando parcialmente…", "warn");
+        }
+        const rs = await api("GET", "/termos?busca=" + encodeURIComponent(chave));
+        if (rs.ok && Array.isArray(rs.data) && rs.data.length > 0) {
+          // mostra o primeiro resultado e informa quantos encontrou
+          mostrarLeitura(rs.data[0]);
+          flash(
+            rs.data.length === 1
+              ? "1 resultado para: " + chave
+              : rs.data.length + " resultados — mostrando o primeiro. Use a lista para ver todos.",
+            "ok"
+          );
+        } else { $("leituraWrap").hidden = true; flash("Não encontrado: " + chave, "err"); }
       } catch { flash("Sem conexão com o servidor.", "err"); }
     }
 

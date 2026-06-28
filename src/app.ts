@@ -85,10 +85,12 @@ app.get("/api", (_req: Request, res: Response) => {
     interface: "GET / — página web (public/index.html)",
     endpoints: {
       "GET /health": "verifica se o servidor está no ar",
+      "GET /stats": "métricas de uso do servidor (queries, adds, fixes, searches, uptime)",
       "GET /termos": "lista todos os termos (LIST) — ?busca=texto filtra por substring",
       "GET /termos/:chave": "busca um termo (QUERY)",
       "POST /termos": "cria um termo (ADD) — corpo: { chave, definicao }",
       "PUT /termos/:chave": "atualiza um termo (FIX) — corpo: { definicao }",
+      "DELETE /termos/:chave": "remove um termo — 404 se não existir",
       "GET /locks": "retrato das travas ativas (ocupadas / com fila)",
       "GET /eventos": "fluxo SSE com estado em tempo real (termos + travas)",
     },
@@ -100,13 +102,18 @@ app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
 });
 
+// Estatísticas de uso (quantas requisições de cada tipo foram atendidas)
+app.get("/stats", (_req: Request, res: Response) => {
+  res.status(200).json(store.getStats());
+});
+
 // Resposta 204 (sem conteúdo) para pedido automático de favicon.ico do navegador
 app.get("/favicon.ico", (_req: Request, res: Response) => {
   res.status(204).end();
 });
 
 // LIST — GET /termos
-app.get("/termos", (_req: Request, res: Response) => {
+app.get("/termos", (req: Request, res: Response) => {
   const busca = req.query.busca;
   if (typeof busca === "string" && busca.trim().length > 0) {
     res.status(200).json(store.search(busca.trim()));
@@ -137,6 +144,14 @@ app.put(
   async (req: Request<{ chave: string }>, res: Response) => {
     const { definicao } = req.body;
     res.status(200).json(await store.fix(normalizeChave(req.params.chave), definicao));
+  },
+);
+
+// REMOVE — DELETE /termos/:chave
+app.delete(
+  "/termos/:chave",
+  async (req: Request<{ chave: string }>, res: Response) => {
+    res.status(200).json(await store.remove(normalizeChave(req.params.chave)));
   },
 );
 

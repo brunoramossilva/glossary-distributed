@@ -190,6 +190,50 @@ describe("GET /termos", () => {
   });
 });
 
+  // DELETE
+  describe("DELETE /termos/:chave", () => {
+    it("200 remove termo existente e retorna o termo removido", async () => {
+      await request(app).post("/termos").send({ chave: "TCP", definicao: "def" });
+      const res = await request(app).delete("/termos/TCP");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ chave: "TCP", definicao: "def" });
+    });
+
+    it("termo removido não aparece no LIST", async () => {
+      await request(app).post("/termos").send({ chave: "TCP", definicao: "def" });
+      await request(app).delete("/termos/TCP");
+      const res = await request(app).get("/termos");
+      expect(res.body).toHaveLength(0);
+    });
+
+    it("termo removido pode ser adicionado novamente", async () => {
+      await request(app).post("/termos").send({ chave: "TCP", definicao: "def" });
+      await request(app).delete("/termos/TCP");
+      const res = await request(app).post("/termos").send({ chave: "TCP", definicao: "nova def" });
+      expect(res.status).toBe(201);
+    });
+
+    it("404 ao remover chave inexistente", async () => {
+      const res = await request(app).delete("/termos/FANTASMA");
+      expect(res.status).toBe(404);
+      expect(res.body).toHaveProperty("erro");
+    });
+
+    it("concorrência: DELETE e ADD simultâneos resultam em estado consistente", async () => {
+      await request(app).post("/termos").send({ chave: "TCP", definicao: "original" });
+      await Promise.allSettled([
+        request(app).delete("/termos/TCP"),
+        request(app).post("/termos").send({ chave: "TCP", definicao: "nova" }),
+      ]);
+      const rList = await request(app).get("/termos");
+      expect(rList.status).toBe(200);
+      expect(rList.body.length).toBeLessThanOrEqual(1);
+      if (rList.body.length === 1) {
+        expect(rList.body[0].chave).toBe("TCP");
+      }
+    });
+  });
+
 // LOCKS
 
 describe("GET /locks", () => {
@@ -208,5 +252,28 @@ describe("GET /api", () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("endpoints");
     expect(res.body).toHaveProperty("servico");
+  });
+});
+
+// STATS
+
+describe("GET /stats", () => {
+  it("retorna estrutura de métricas", async () => {
+    const res = await request(app).get("/stats");
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      total_termos: expect.any(Number),
+      total_queries: expect.any(Number),
+      total_adds: expect.any(Number),
+      total_fixes: expect.any(Number),
+      total_searches: expect.any(Number),
+      uptime_segundos: expect.any(Number),
+    });
+  });
+
+  it("incrementa total_termos após ADD", async () => {
+    await request(app).post("/termos").send({ chave: "TCP", definicao: "def" });
+    const res = await request(app).get("/stats");
+    expect(res.body.total_termos).toBe(1);
   });
 });

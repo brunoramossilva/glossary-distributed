@@ -50,6 +50,7 @@ function notificarLista(): void {
 
 // QUERY — leitura de um termo. Leitura é atômica no event loop, não usa lock.
 export function query(chave: string): Termo {
+  contadores.queries++;
   const definicao = termos.get(chave);
   if (definicao === undefined) throw new TermoNaoEncontradoError(chave);
   return { chave, definicao };
@@ -61,6 +62,7 @@ export function list(): Termo[] {
 }
 
 export function search(termo: string): Termo[] {
+  contadores.searches++; 
   const t = termo.toLowerCase();
   return [...termos]
     .filter(([chave, definicao]) =>
@@ -76,6 +78,7 @@ export function add(chave: string, definicao: string): Promise<Termo> {
     if (termos.has(chave)) throw new TermoJaExisteError(chave);
     await talvezAtraso();
     termos.set(chave, definicao);
+    contadores.adds++; 
     await persistir();
     notificarLista();
     return { chave, definicao };
@@ -88,6 +91,20 @@ export function fix(chave: string, definicao: string): Promise<Termo> {
     if (!termos.has(chave)) throw new TermoNaoEncontradoError(chave);
     await talvezAtraso();
     termos.set(chave, definicao);
+    contadores.fixes++; 
+    await persistir();
+    notificarLista();
+    return { chave, definicao };
+  });
+}
+
+// REMOVE — remove um termo existente; falha se não existir.
+export function remove(chave: string): Promise<Termo> {
+  return withKeyLock(chave, async () => {
+    contadores.removes++;
+    const definicao = termos.get(chave);
+    if (definicao === undefined) throw new TermoNaoEncontradoError(chave);
+    termos.delete(chave);
     await persistir();
     notificarLista();
     return { chave, definicao };
@@ -98,4 +115,17 @@ export function fix(chave: string, definicao: string): Promise<Termo> {
 // A persistência em disco aponta para .test-glossario.json (via vitest.config.ts)
 export function _resetParaTestes(): void {
   termos.clear();
+}
+
+const contadores = { queries: 0, adds: 0, fixes: 0, searches: 0, removes: 0};
+export function getStats() {
+  return {
+    total_termos: termos.size,
+    total_queries: contadores.queries,
+    total_adds: contadores.adds,
+    total_fixes: contadores.fixes,
+    total_searches: contadores.searches,
+    total_removes: contadores.removes,
+    uptime_segundos: Math.floor(process.uptime()),
+  };
 }
